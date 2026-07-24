@@ -1,0 +1,57 @@
+<div class="dialogue-sync-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Dialogue Sync</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+
+        <div class="inline-drawer-content">
+            <small class="ds-hint">
+                번역 프롬프트의 원문 대사를 번역문 대사에 붙여 넣습니다.
+                메시지의 ✂ 버튼을 눌렀을 때만 실행됩니다.
+            </small>
+
+            <hr class="sysHR">
+
+            <label for="ds_prompt">사용 중인 번역 프롬프트</label>
+            <small class="ds-hint">
+                프롬프트를 붙여 넣고 아래 버튼을 누르면 태그를 채워 줍니다.
+            </small>
+            <textarea id="ds_prompt" class="text_pole textarea_compact" rows="6"
+                placeholder="번역 프롬프트를 여기에 붙여 넣으세요"></textarea>
+
+            <div class="ds-row">
+                <div id="ds_detect" class="menu_button menu_button_icon">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>태그 찾기</span>
+                </div>
+                <div id="ds_detect_ai" class="menu_button menu_button_icon">
+                    <i class="fa-solid fa-robot"></i>
+                    <span>AI로 분석</span>
+                </div>
+            </div>
+            <div id="ds_status" class="ds-status"></div>
+
+            <hr class="sysHR">
+
+            <label for="ds_source_tag">원문 태그</label>
+            <input id="ds_source_tag" class="text_pole" type="text" placeholder="english_output">
+
+            <label for="ds_target_tag">번역 태그</label>
+            <input id="ds_target_tag" class="text_pole" type="text" placeholder="trans_korean">
+
+            <label for="ds_threshold">
+                문장 매칭 기준 <span id="ds_threshold_value">0.55</span>
+            </label>
+            <input id="ds_threshold" type="range" min="0.2" max="0.9" step="0.05" value="0.55">
+            <small class="ds-hint">
+                낮추면 더 많이 붙지만 잘못 붙을 수 있고, 높이면 확실한 것만 붙습니다.
+            </small>
+
+            <label class="checkbox_label" for="ds_enable_undo">
+                <input id="ds_enable_undo" type="checkbox">
+                <span>되돌리기 버튼 표시</span>
+            </label>
+        </div>
+    </div>
+</div>
