@@ -326,23 +326,52 @@ export function extractTagCandidates(prompt) {
 
 /**
  * 태그 후보 중 원문/번역 태그를 추측.
- * 이름에 담긴 힌트를 우선하고, 없으면 등장 순서(원문이 먼저)를 따른다.
+ * 이름에 담긴 힌트를 점수로 매기고, 없으면 등장 순서(원문이 먼저)를 따른다.
  */
 export function guessTagRoles(candidates) {
     if (!candidates || candidates.length < 2) return null;
 
-    const SRC_HINT = /(eng|english|source|src|original|orig|raw|output|en)\b/i;
-    const TGT_HINT =
-        /(trans|translat|kor|korean|ko|jp|jpn|japanese|zh|chinese|target|tgt|번역|한국어)/i;
+    // 전체를 감싸기만 하는 껍데기 태그는 후보에서 제외
+    const WRAPPER = /^(translation_protocol|protocol|format|output_format|instructions?|rules?|template|response|answer|reply)$/i;
+    let pool = candidates.filter((c) => !WRAPPER.test(c));
+    if (pool.length < 2) pool = candidates.slice();
 
-    let src = candidates.find((c) => SRC_HINT.test(c) && !TGT_HINT.test(c));
-    let tgt = candidates.find((c) => TGT_HINT.test(c) && c !== src);
+    // 언어 이름이 가장 강한 단서. 그 다음이 역할 이름.
+    const SRC_LANG = /(english|eng|en_|_en|latin)/i;
+    const TGT_LANG = /(korean|kor|한국|japanese|jpn|jap|chinese|chn|zho|russian|rus|spanish|esp|french|fra|german|deu|thai|arabic)/i;
+    const SRC_ROLE = /(source|src|original|orig|raw)/i;
+    const TGT_ROLE = /(translat|trans|번역|version|localiz)/i;
 
-    if (!src && tgt) src = candidates.find((c) => c !== tgt);
-    if (src && !tgt) tgt = candidates.find((c) => c !== src);
-    if (!src || !tgt) {
-        src = candidates[0];
-        tgt = candidates[1];
+    const score = (name) => {
+        let s = 0;
+        if (SRC_LANG.test(name)) s -= 3;
+        if (SRC_ROLE.test(name)) s -= 2;
+        if (TGT_LANG.test(name)) s += 3;
+        if (TGT_ROLE.test(name)) s += 2;
+        return s;
+    };
+
+    const scored = pool.map((name, i) => ({ name, i, s: score(name) }));
+
+    const srcs = scored.filter((x) => x.s < 0).sort((a, b) => a.s - b.s || a.i - b.i);
+    const tgts = scored.filter((x) => x.s > 0).sort((a, b) => b.s - a.s || b.i - a.i);
+
+    let src = srcs[0]?.name;
+    let tgt = tgts.find((x) => x.name !== src)?.name;
+
+    // 한쪽만 확정된 경우, 나머지는 등장 순서로 채운다.
+    if (src && !tgt) {
+        tgt = pool.find((c) => c !== src && pool.indexOf(c) > pool.indexOf(src)) ||
+              pool.find((c) => c !== src);
     }
+    if (!src && tgt) {
+        src = pool.find((c) => c !== tgt && pool.indexOf(c) < pool.indexOf(tgt)) ||
+              pool.find((c) => c !== tgt);
+    }
+    if (!src || !tgt) {
+        src = pool[0];
+        tgt = pool[1];
+    }
+
     return { sourceTag: src, targetTag: tgt };
 }
