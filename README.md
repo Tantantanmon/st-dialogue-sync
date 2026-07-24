@@ -25,13 +25,13 @@
 SillyTavern의 확장 탭에서 **Install extension** 을 누르고 이 저장소 주소를 붙여 넣으세요.
 
 ```
-https://github.com/YOUR_GITHUB_USERNAME/dialogue-sync
+https://github.com/Tantantanmon/st-dialogue-sync
 ```
 
 또는 저장소를 직접 아래 경로에 두어도 됩니다.
 
 ```
-SillyTavern/public/scripts/extensions/third-party/dialogue-sync/
+SillyTavern/public/scripts/extensions/third-party/st-dialogue-sync/
 ```
 
 ## 설정

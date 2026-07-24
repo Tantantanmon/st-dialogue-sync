@@ -5,8 +5,8 @@
     "optional": [],
     "js": "index.js",
     "css": "style.css",
-    "author": "YOUR_GITHUB_USERNAME",
+    "author": "Tantantanmon",
     "version": "1.0.0",
-    "homePage": "https://github.com/YOUR_GITHUB_USERNAME/dialogue-sync",
+    "homePage": "https://github.com/Tantantanmon/st-dialogue-sync",
     "auto_update": true
 }

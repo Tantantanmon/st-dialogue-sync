@@ -9,6 +9,21 @@ const NAME = 'dialogue-sync';
 const SYNC_BTN = 'dialogue_sync_button';
 const UNDO_BTN = 'dialogue_sync_undo';
 
+/**
+ * 설치된 폴더 이름을 스크립트 경로에서 알아낸다.
+ * 저장소 이름을 바꿔도 settings.html 을 찾을 수 있게 하기 위함.
+ */
+function extensionFolder() {
+    try {
+        const url = import.meta.url;
+        const m = url.match(/third-party\/([^/]+)\//);
+        if (m) return m[1];
+    } catch {
+        /* import.meta 를 못 쓰는 환경이면 아래 기본값 사용 */
+    }
+    return NAME;
+}
+
 /* ---------------- 설정 ---------------- */
 
 function ctx() {
@@ -324,7 +339,7 @@ async function loadPanel(attempt = 0) {
         return;
     }
 
-    const path = `scripts/extensions/third-party/${NAME}/settings.html`;
+    const path = `scripts/extensions/third-party/${extensionFolder()}/settings.html`;
     try {
         const html = await $.get(path);
         $host.append(html);
