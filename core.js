@@ -115,6 +115,18 @@ export function findQuoted(text) {
             });
         }
     }
+    // 문자 메시지: 줄 맨 앞이 > 인 줄 전체를 하나의 대사로 본다
+    const lineRe = /^([ \t]*>[ \t]*)(.+?)[ \t]*$/gm;
+    let lm;
+    while ((lm = lineRe.exec(text)) !== null) {
+        out.push({
+            start: lm.index,
+            end: lm.index + lm[0].length,
+            open: lm[1],
+            close: '',
+            inner: lm[2],
+        });
+    }
     // 겹치는 구간 제거 후 위치순 정렬
     out.sort((a, b) => a.start - b.start);
     const clean = [];
@@ -133,7 +145,8 @@ export function findQuoted(text) {
  * srcScript / tgtScript 는 감지된 문자 체계 id.
  */
 export function splitPair(inner, srcScript, tgtScript) {
-    const m = inner.match(/^([\s\S]*?)\s*[(（[]([\s\S]*?)[)）\]]\s*$/);
+    // 마지막 괄호 묶음을 번역으로 본다. 원문 안에 괄호가 있어도 안전하게.
+    const m = inner.match(/^([\s\S]*)\s*[(（[]([^()（）[\]]*)[)）\]]\s*$/);
     if (!m) return null;
     const a = m[1].trim();
     const b = m[2].trim();
@@ -374,4 +387,27 @@ export function guessTagRoles(candidates) {
     }
 
     return { sourceTag: src, targetTag: tgt };
+}
+
+/* ---------------- 형식 교정 ---------------- */
+// "영어" (한국어) / "영어" ("한국어") / "영어 ("한국어")" / "영어" "한국어"
+// → "영어 (한국어)"
+const Q_OPEN = '["“]', Q_CLOSE = '["”]';
+const EN = '([^"“”\\n()（）가-힣]*[A-Za-z][^"“”\\n()（）가-힣]*?)';
+const KO = '([^"“”\\n()（）]*[가-힣][^"“”\\n()（）]*?)';
+const FIX_PATTERNS = [
+    new RegExp(Q_OPEN + EN + Q_CLOSE + '[ \\t]*[(（][ \\t]*' + Q_OPEN + '?' + KO + Q_CLOSE + '?[ \\t]*[)）]', 'g'),
+    new RegExp(Q_OPEN + EN + '[ \\t]*[(（][ \\t]*' + Q_OPEN + KO + Q_CLOSE + '[ \\t]*[)）]' + Q_CLOSE + '?', 'g'),
+    new RegExp(Q_OPEN + EN + Q_CLOSE + '[ \\t]*' + Q_OPEN + KO + Q_CLOSE, 'g'),
+];
+
+export function normalizeFormat(text) {
+    let changed = 0;
+    for (const re of FIX_PATTERNS) {
+        text = text.replace(re, (_, en, ko) => {
+            changed++;
+            return `"${en.trim()} (${ko.trim()})"`;
+        });
+    }
+    return { text, changed };
 }

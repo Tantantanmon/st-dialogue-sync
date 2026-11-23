@@ -3,6 +3,7 @@ import {
     syncDialogue,
     extractTagCandidates,
     guessTagRoles,
+    normalizeFormat,
 } from './core.js';
 
 const NAME = 'dialogue-sync';
@@ -56,6 +57,10 @@ function status(msg, kind) {
     $s.removeClass('ds-ok ds-warn');
     if (kind) $s.addClass(kind === 'ok' ? 'ds-ok' : 'ds-warn');
     $s.text(msg || '');
+}
+
+function notify(msg, kind) {
+    if (typeof toastr !== 'undefined' && toastr[kind]) toastr[kind](msg, 'Dialogue Sync');
 }
 
 /* ---------------- 태그 찾기 ---------------- */
@@ -203,6 +208,34 @@ async function applyMessage(c, mesId, message, text) {
     await c.saveChat();
 }
 
+/**
+ * 메시지 하나를 교정한다. 버튼과 /dsync 명령이 같이 쓴다.
+ * @returns {Promise<number>} 바꾼 대사 개수 (0이면 변경 없음)
+ */
+async function syncMessage(c, mesId) {
+    const message = c.chat[mesId];
+    if (!message || typeof message.mes !== 'string' || message.is_user || message.is_system) {
+        notify('교정할 수 있는 AI 메시지가 아닙니다.', 'warning');
+        return 0;
+    }
+
+    const fixed = normalizeFormat(message.mes);
+    const result = syncDialogue(fixed.text, settings());
+    const finalText = result ? result.text : fixed.text;
+    const changed = fixed.changed + (result ? result.changed : 0);
+
+    if (finalText === message.mes) {
+        notify('고칠 대사가 없습니다.', 'info');
+        return 0;
+    }
+
+    backups.set(backupKey(c, mesId), { before: message.mes, after: finalText });
+    await applyMessage(c, mesId, message, finalText);
+    notify(`대사 ${changed}개를 고쳤습니다.`, 'success');
+    refreshButtons();
+    return changed;
+}
+
 async function onSyncClick(event) {
     event.stopPropagation();
     const c = ctx();
@@ -211,15 +244,7 @@ async function onSyncClick(event) {
     const mesId = messageIdFrom($(event.currentTarget));
     if (mesId === null) return;
 
-    const message = c.chat[mesId];
-    if (!message || typeof message.mes !== 'string') return;
-
-    const result = syncDialogue(message.mes, settings());
-    if (!result || result.text === message.mes) return;
-
-    backups.set(backupKey(c, mesId), message.mes);
-    await applyMessage(c, mesId, message, result.text);
-    refreshButtons();
+    await syncMessage(c, mesId);
 }
 
 async function onUndoClick(event) {
@@ -231,14 +256,22 @@ async function onUndoClick(event) {
     if (mesId === null) return;
 
     const key = backupKey(c, mesId);
-    const original = backups.get(key);
-    if (original === undefined) return;
+    const saved = backups.get(key);
+    if (saved === undefined) return;
 
     const message = c.chat[mesId];
     if (!message) return;
 
+    // 그 사이 스와이프·편집·삭제로 메시지가 바뀌었다면 덮어쓰지 않는다
+    if (message.mes !== saved.after) {
+        backups.delete(key);
+        refreshButtons();
+        notify('메시지가 바뀌어서 되돌릴 수 없습니다. 원문을 덮어쓰지 않았어요.', 'warning');
+        return;
+    }
+
     backups.delete(key);
-    await applyMessage(c, mesId, message, original);
+    await applyMessage(c, mesId, message, saved.before);
     refreshButtons();
 }
 
@@ -266,8 +299,9 @@ function decorate($mes) {
 
     const c = ctx();
     const mesId = Number($mes.attr('mesid'));
-    const hasBackup =
-        c && !Number.isNaN(mesId) && backups.has(backupKey(c, mesId));
+    const saved =
+        c && !Number.isNaN(mesId) ? backups.get(backupKey(c, mesId)) : undefined;
+    const hasBackup = !!saved && c.chat?.[mesId]?.mes === saved.after;
     const showUndo = settings().enableUndo && hasBackup;
     const $existing = $container.find(`.${UNDO_BTN}`);
 
@@ -324,6 +358,50 @@ function bindSettingsUI() {
     $('#ds_detect_ai').on('click', detectWithAI);
 }
 
+/* ---------------- /dsync 명령 ---------------- */
+
+async function runDsync(arg) {
+    const c = ctx();
+    if (!c || !Array.isArray(c.chat) || c.chat.length === 0) return '0';
+
+    let mesId;
+    const raw = String(arg ?? '').trim();
+    if (raw !== '') {
+        mesId = Number(raw);
+    } else {
+        // 인자가 없으면 가장 최근 AI 메시지
+        for (let i = c.chat.length - 1; i >= 0; i--) {
+            const m = c.chat[i];
+            if (m && !m.is_user && !m.is_system) { mesId = i; break; }
+        }
+    }
+    if (mesId === undefined || Number.isNaN(mesId)) {
+        notify('교정할 AI 메시지를 찾지 못했습니다.', 'warning');
+        return '0';
+    }
+    return String(await syncMessage(c, mesId));
+}
+
+function registerCommand() {
+    const c = ctx();
+    if (!c) return;
+    const help = '마지막 AI 메시지(또는 지정한 번호)의 대사를 "영어 (한국어)" 형식으로 고칩니다. 예: /dsync 또는 /dsync 12';
+    try {
+        if (c.SlashCommandParser && c.SlashCommand) {
+            c.SlashCommandParser.addCommandObject(c.SlashCommand.fromProps({
+                name: 'dsync',
+                callback: async (_args, value) => runDsync(value),
+                helpString: help,
+                returns: '바꾼 대사 개수',
+            }));
+        } else if (typeof c.registerSlashCommand === 'function') {
+            c.registerSlashCommand('dsync', async (_args, value) => runDsync(value), [], help, true, true);
+        }
+    } catch (err) {
+        console.error('[Dialogue Sync] /dsync 등록 실패', err);
+    }
+}
+
 /* ---------------- 초기화 ---------------- */
 
 async function loadPanel(attempt = 0) {
@@ -362,6 +440,8 @@ function init() {
         ev.MESSAGE_SWIPED,
         ev.MESSAGE_UPDATED,
         ev.MESSAGE_EDITED,
+        ev.MESSAGE_DELETED,
+        ev.MORE_MESSAGES_LOADED,
     ].filter(Boolean);
 
     for (const e of events) {
@@ -375,6 +455,7 @@ function init() {
         });
     }
 
+    registerCommand();
     loadPanel();
     refreshButtons();
 }
